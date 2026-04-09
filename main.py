@@ -1,40 +1,8 @@
+#!/usr/bin/env python3
 import cmd
 import argparse
 import sys
-
-BANNER = """
- ██╗  ██╗██╗   ██╗██████╗ ████████╗
- ██║ ██╔╝██║   ██║██╔══██╗╚══██╔══╝
- █████╔╝ ██║   ██║██████╔╝   ██║   
- ██╔═██╗ ██║   ██║██╔══██╗   ██║   
- ██║  ██╗╚██████╔╝██║  ██║   ██║   
- ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   
-  Terminal Music Player v0.1
-"""
-
-class KurtShell(cmd.Cmd):
-    intro = BANNER + 'Type "help" for a list of commands or "exit" to quit.\n'
-    prompt = 'kurt> '
-
-    def do_search(self, arg):
-        """Search for a song: search <title>"""
-        if not arg:
-            print("Please enter a search query.")
-            return
-        print(f"Searching for '{arg}' on YouTube (default)...")
-        # search module would be called here
-
-    def do_queue(self, arg):
-        """Show the playlist: queue"""
-        print("Empty queue. Add something with 'add'.")
-
-    def do_exit(self, arg):
-        """Exit the program"""
-        print("See you later!")
-        return True
-
-    def emptyline(self):
-        pass
+from kurt_shell import KurtShell, BANNER
 
 def main():
     # argparse settings
