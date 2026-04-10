@@ -14,8 +14,16 @@ class Player:
             raise e
 
     def play(self, url):
-        """Запустити відтворення"""
+        """Play a song"""
         self.instance.play(url)
+
+    def pause(self):
+        """Pause playback"""
+        self.instance.pause = True
+
+    def resume(self):
+        """Resume playback"""
+        self.instance.pause = False
 
     def toggle_pause(self):
         """Toggle pause"""

@@ -69,6 +69,16 @@ class KurtShell(cmd.Cmd):
         except ValueError:
             print("Please enter a valid number corresponding to the search results.")
 
+    def do_pause(self, arg):
+        """Pause playback: pause"""
+        self.player.pause()
+        print("Playback paused.")
+
+    def do_resume(self, arg):
+        """Resume playback: resume"""
+        self.player.resume()
+        print("Playback resumed.")
+
     def do_queue(self, arg):
         """Show the playlist: queue"""
         print("Empty queue. Add something with 'add'.")
