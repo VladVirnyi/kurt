@@ -118,13 +118,16 @@ class KurtShell(cmd.Cmd):
         """Skip to the next song in the queue: skip"""
         self.player.queue_skip()
         print("Skipped to the next song.")
+        self.queue_list.pop(0)
+        
+        self.player.skip()
 
     def do_clear(self, arg):
         """Clear the playlist: clear"""
         self.player.queue_clear()
         self.queue_list.clear()
         print("Queue cleared.")
-        
+
     def do_volume(self, arg):
         """Set volume: volume <0-100>"""
         if not arg:
