@@ -5,7 +5,7 @@ import sys
 from kurt_shell import KurtShell, BANNER
 
 def main():
-    (print("DEBUG: Starting KurtShell..."))
+    # (print("DEBUG: Starting KurtShell..."))
     # argparse settings
     parser = argparse.ArgumentParser(prog='kurt', description='Minimalist CLI Music Player')
     parser.add_argument('-sp', '--spotify', action='store_true', help='Use Spotify as search platform')
@@ -14,7 +14,7 @@ def main():
 
     if len(sys.argv) == 1:
         KurtShell().cmdloop()
-        print("DEBUG: Exiting KurtShell...")
+        # print("DEBUG: Exiting KurtShell...")
     else:
         args = parser.parse_args()
         if args.spotify:
