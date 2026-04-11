@@ -83,7 +83,21 @@ class KurtShell(cmd.Cmd):
         """Show the playlist: queue"""
         print("Empty queue. Add something with 'add'.")
 
-    # У файл kurt_shell.py
+    def do_volume(self, arg):
+        """Set volume: volume <0-100>"""
+        if not arg:
+            vol = self.player.get_volume()
+            print(f"Current volume: {vol}")
+            return
+        try:
+            volume = int(arg)
+            if 0 <= volume <= 100:
+                self.player.set_volume(volume)
+                print(f"Volume set to {volume}.")
+            else:
+                print("Volume must be between 0 and 100.")
+        except ValueError:
+            print("Please enter a valid number for volume.")
 
     def _format_time(self, seconds):
         """Method to format time in seconds to MM:SS format"""

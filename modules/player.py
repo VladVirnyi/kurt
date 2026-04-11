@@ -37,6 +37,15 @@ class Player:
         """Set volume (0-100)"""
         self.instance.volume = value
 
+    def set_volume(self, volume):
+        """Set volume (0-100)"""
+        volume = max(0, min(100, volume))  # Ensure volume is between 0 and 100
+        self.instance.volume = volume
+
+    def get_volume(self):
+        """Get current volume"""
+        return getattr(self.instance, 'volume', 100)
+
     def get_status(self):
         """Get current playback status"""
         return {
