@@ -21,6 +21,7 @@ class KurtShell(cmd.Cmd):
         self.youtube_search = YoutubeSearch()
         self.current_results = []
         self.player = Player()
+        self.queue_list = []
 
     def do_search(self, arg):
         """Search for a song: search <title>"""
@@ -81,8 +82,49 @@ class KurtShell(cmd.Cmd):
 
     def do_queue(self, arg):
         """Show the playlist: queue"""
-        print("Empty queue. Add something with 'add'.")
+        if not self.queue_list:
+            print("Empty queue. Add something with 'add'.")
+        else:
+            for i, song in enumerate(self.queue_list, 1):
+                print(f"[{i}] {song}")
 
+    def do_add(self, arg):
+        """Add a song to the queue: add <title>"""
+        if not self.current_results:
+            print("Please add something via 'search', 'add'...")
+            return
+        
+        try:
+            index = int(arg) - 1
+            if 0 <= index < len(self.current_results):
+                entry = self.current_results[index]
+                video_id = entry.get('id')
+                url = f"https://www.youtube.com/watch?v={video_id}"
+                title = entry.get('title', 'Unknown Title')
+
+                # adding to player
+                self.player.queue_add(url)
+                
+                # saving title for queue display
+                self.queue_list.append(title)
+                
+                print(f"Added to queue: {title}")
+            else:
+                print("Invalid index. Please choose a number from the search results.")
+        except ValueError:
+            print("Please enter a valid number corresponding to the search results.")
+
+    def do_skip(self, arg):
+        """Skip to the next song in the queue: skip"""
+        self.player.queue_skip()
+        print("Skipped to the next song.")
+
+    def do_clear(self, arg):
+        """Clear the playlist: clear"""
+        self.player.queue_clear()
+        self.queue_list.clear()
+        print("Queue cleared.")
+        
     def do_volume(self, arg):
         """Set volume: volume <0-100>"""
         if not arg:

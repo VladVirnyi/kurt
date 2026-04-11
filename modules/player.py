@@ -55,3 +55,15 @@ class Player:
             "time": self.instance.time_pos,
             "duration": self.instance.duration
         }
+    
+    def queue_add(self, url):
+        """Add a song to the queue"""
+        self.instance.loadfile(url, mode='append-play')
+
+    def queue_skip(self):
+        """Skip to the next song in the queue"""
+        self.instance.command('playlist-next', 'force')
+    
+    def queue_clear(self):
+        """Clear the playlist"""
+        self.instance.playlist_clear()
