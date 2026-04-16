@@ -1,2 +1,3 @@
 yt-dlp
 python-mpv
+prompt_toolkit
