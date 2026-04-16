@@ -1,6 +1,10 @@
-import cmd
+import asyncio
+from prompt_toolkit import PromptSession
+from prompt_toolkit.patch_stdout import patch_stdout
+
 from modules.search import YoutubeSearch
 from modules.player import Player
+from prompt_toolkit.key_binding import KeyBindings
 
 BANNER = """
  ██╗  ██╗██╗   ██╗██████╗ ████████╗
@@ -9,51 +13,77 @@ BANNER = """
  ██╔═██╗ ██║   ██║██╔══██╗   ██║   
  ██║  ██╗╚██████╔╝██║  ██║   ██║   
  ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   
-  Terminal Music Player v0.1
+  Terminal Music Player v0.1 (Async)
 """
 
-class KurtShell(cmd.Cmd):
-    intro = BANNER + 'Type "help" for a list of commands or "exit" to quit.\n'
-    prompt = 'kurt> '
-
+class KurtAsyncShell:
     def __init__(self):
-        super().__init__()
         self.youtube_search = YoutubeSearch()
-        self.current_results = []
         self.player = Player()
+        self.current_results = []
         self.queue_list = []
+        self.current_task = None
+        
+        self.system_commands = [
+            'pause', 'resume', 'queue', 'skip', 'clear', 
+            'status', 'exit', 'quit', 'help', 'volume', 'add', 'play'
+        ]
 
-    def do_search(self, arg):
-        """Search for a song: search <title>"""
-        if not arg:
-            print("Please enter a search query.")
+    async def perform_search(self, query):
+        try:
+            loop = asyncio.get_running_loop()
+            results = await loop.run_in_executor(None, self.youtube_search.search, query)
+            self.current_results = results
+            self.display_results(query)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            print(f"\n[Error during search: {e}]")
+
+    def display_results(self, query):
+        if not self.current_results:
             return
-        print(f"Searching for '{arg}' on YouTube (default)...")
-        # search module would be called here
-        results = self.youtube_search.search(arg)
-        self.current_results = results
-
-        for i, entry in enumerate(self.current_results, 1):
-            # printing title and duration (if available)
+            
+        print(f"\n--- Search Results for '{query}' ---")
+        for i, entry in enumerate(self.current_results[:10], 1):
             title = entry.get('title', 'Unknown Title')
             duration = entry.get('duration', '??')
             print(f"[{i}] {title} ({duration}s)")
+        print("-" * 35)
 
-    def default(self, line):
-        """This method is called when the command is not recognized."""
-        if line.isdigit():
-            # If a number is entered, call do_play with that number
-            return self.do_play(line)
-        else:
-            print(f"*** Unknown command: {line}")
+    # ЗВЕРНИ УВАГУ: Ця функція тепер звичайна (не async).
+    # prompt_toolkit викликає її синхронно при кожному натисканні клавіші.
+    def on_text_changed(self, buffer):
+        text = buffer.text.strip()
 
-    def do_play(self, arg):
-        """Play a song from search results"""
+        if self.current_task:
+            self.current_task.cancel()
+
+        if not text:
+            return
+
+        parts = text.lower().split()
+        first_word = parts[0]
+
+        if text.isdigit() or first_word in self.system_commands or len(text) < 3:
+            return
+
+        # Ми створюємо фонове завдання з синхронної функції
+        self.current_task = asyncio.create_task(self.run_debounced(text))
+
+    async def run_debounced(self, query):
+        await asyncio.sleep(0.5)
+        await self.perform_search(query)
+
+    # ================= COMMAND HANDLERS ================= #
+    # (Цей блок залишається без змін)
+
+    def handle_play(self, arg):
         if not arg:
             print("Please specify the number of the song to play from the search results.")
             return
         if not self.current_results:
-            print("No search results available. Use 'search' command first.")
+            print("No search results available. Start typing to search first.")
             return
         try:
             index = int(arg) - 1
@@ -63,37 +93,49 @@ class KurtShell(cmd.Cmd):
             
             video_id = self.current_results[index].get('id')
             url = f"https://www.youtube.com/watch?v={video_id}"
+            title = self.current_results[index].get('title', 'Unknown Title')
 
-            print(f"Playing: {self.current_results[index]['title']}")
+            print(f"▶️ Playing: {title}")
             self.player.play(url)
-
         except ValueError:
             print("Please enter a valid number corresponding to the search results.")
 
-    def do_pause(self, arg):
-        """Pause playback: pause"""
-        self.player.pause()
-        print("Playback paused.")
-
-    def do_resume(self, arg):
-        """Resume playback: resume"""
-        self.player.resume()
-        print("Playback resumed.")
-
-    def do_queue(self, arg):
-        """Show the playlist: queue"""
-        if not self.queue_list:
-            print("Empty queue. Add something with 'add'.")
-        else:
-            for i, song in enumerate(self.queue_list, 1):
-                print(f"[{i}] {song}")
-
-    def do_add(self, arg):
-        """Add a song to the queue: add <title>"""
-        if not self.current_results:
-            print("Please add something via 'search', 'add'...")
-            return
+    def get_bottom_toolbar(self):
+        """Генерує текст для нижньої панелі (Progress Bar)"""
+        info = self.player.get_status()
         
+        if not info:
+            return " 🎵 Ready to play. Start typing to search!"
+        if info.get('pause'):
+            return " ⏸ Playback Paused."
+
+        # Використовуємо 'or', щоб надійно перехопити None
+        curr = info.get('time') or 0
+        total = info.get('duration') or 1 
+        
+        bar_length = 30
+        progress = min(curr / total, 1.0)
+        filled_chars = int(progress * bar_length)
+        bar = '█' * filled_chars + '-' * (bar_length - filled_chars)
+        
+        curr_str = self._format_time(curr)
+        total_str = self._format_time(total)
+        
+        # ВИПРАВЛЕННЯ: Тепер якщо title = None, спрацює 'or'
+        title = info.get('title') or 'Unknown Title'
+        
+        # На всякий випадок кастуємо в string (захист типів)
+        title = str(title)
+        
+        if len(title) > 35:
+            title = title[:32] + "..."
+
+        return f" ▶️ {title} | {curr_str} [{bar}] {total_str} "
+
+    def handle_add(self, arg):
+        if not self.current_results:
+            print("Please search for a song first by typing its name.")
+            return
         try:
             index = int(arg) - 1
             if 0 <= index < len(self.current_results):
@@ -102,75 +144,169 @@ class KurtShell(cmd.Cmd):
                 url = f"https://www.youtube.com/watch?v={video_id}"
                 title = entry.get('title', 'Unknown Title')
 
-                # adding to player
                 self.player.queue_add(url)
-                
-                # saving title for queue display
                 self.queue_list.append(title)
-                
-                print(f"Added to queue: {title}")
+                print(f"✅ Added to queue: {title}")
             else:
                 print("Invalid index. Please choose a number from the search results.")
         except ValueError:
-            print("Please enter a valid number corresponding to the search results.")
+            print("Please enter a valid number.")
 
-    def do_skip(self, arg):
-        """Skip to the next song in the queue: skip"""
+    def handle_queue(self):
+        if not self.queue_list:
+            print("Empty queue. Add something with 'add <number>'.")
+        else:
+            print("\n--- Current Queue ---")
+            for i, song in enumerate(self.queue_list, 1):
+                print(f"[{i}] {song}")
+
+    def handle_skip(self):
+        # Викликаємо правильний метод, який існує в player.py
         self.player.queue_skip()
-        print("Skipped to the next song.")
-        self.queue_list.pop(0)
         
-        self.player.skip()
+        # Оновлюємо наш візуальний список черги
+        if self.queue_list:
+            skipped = self.queue_list.pop(0)
+            print(f"⏭ Skipped: {skipped}")
 
-    def do_clear(self, arg):
-        """Clear the playlist: clear"""
+    def handle_clear(self):
         self.player.queue_clear()
         self.queue_list.clear()
-        print("Queue cleared.")
+        print("🗑 Queue cleared.")
 
-    def do_volume(self, arg):
-        """Set volume: volume <0-100>"""
+    def handle_volume(self, arg):
         if not arg:
             vol = self.player.get_volume()
-            print(f"Current volume: {vol}")
+            print(f"🔊 Current volume: {vol}")
             return
         try:
             volume = int(arg)
             if 0 <= volume <= 100:
                 self.player.set_volume(volume)
-                print(f"Volume set to {volume}.")
+                print(f"🔊 Volume set to {volume}.")
             else:
                 print("Volume must be between 0 and 100.")
         except ValueError:
             print("Please enter a valid number for volume.")
 
     def _format_time(self, seconds):
-        """Method to format time in seconds to MM:SS format"""
         if seconds is None:
             return "00:00"
         minutes = int(seconds // 60)
         seconds = int(seconds % 60)
         return f"{minutes:02d}:{seconds:02d}"
 
-    def do_status(self, arg):
-        """Show the current playback status: status"""
+    def handle_status(self):
         info = self.player.get_status()
-        
         if not info:
             print("No song is currently playing.")
             return
 
-        curr_time = self._format_time(info['time'])
-        total_time = self._format_time(info['duration'])
-        status_icon = "⏸" if info['pause'] else "▶"
+        curr_time = self._format_time(info.get('time', 0))
+        total_time = self._format_time(info.get('duration', 0))
+        status_icon = "⏸" if info.get('pause') else "▶️"
+        title = info.get('title', 'Unknown Title')
 
-        print(f"\n{status_icon} Currently playing: {info['title']}")
+        print(f"\n{status_icon} Currently playing: {title}")
         print(f"Time: [{curr_time} / {total_time}]")
 
-    def do_exit(self, arg):
-        """Exit the program"""
-        print("See you later!")
-        return True
+    def handle_help(self):
+        help_text = """
+Commands:
+  [type words]    Instant search for songs on YouTube
+  [number]        Play the song at that number (e.g. '1')
+  play [number]   Play the specified song
+  add [number]    Add the specified song to the queue
+  pause / resume  Pause or resume playback
+  queue           Show the current playlist
+  skip            Skip to the next song in the queue
+  clear           Clear the playlist
+  volume [0-100]  Set or view current volume
+  status          Show what is currently playing
+  exit / quit     Exit the player
+"""
+        print(help_text)
 
-    def emptyline(self):
-        pass
+    # ================= MAIN LOOP ================= #
+
+    async def start(self):
+        session = PromptSession()
+        session.default_buffer.on_text_changed += self.on_text_changed
+        
+        # Створюємо реєстр гарячих клавіш
+        bindings = KeyBindings()
+
+        # Додаємо комбінації Alt+1, Alt+2 ... Alt+9
+        # В терміналах Alt розпізнається як послідовність 'escape', а потім символ
+        for i in range(1, 10):
+            # eager=True перекриває default behavior термінала
+            @bindings.add('escape', str(i), eager=True) 
+            def _(event, num=i):
+                event.app.current_buffer.text = str(num)
+                event.app.current_buffer.validate_and_handle()
+
+        # Додаємо кастомне очищення рядка на Ctrl+L (якщо хочеш)
+        @bindings.add('c-l')
+        def _(event):
+            event.app.current_buffer.text = ''
+
+        print(BANNER)
+        print("Type to search instantly. Type 'help' for commands.\n")
+        print("💡 Pro-Tip: Press Alt+1, Alt+2 to instantly play a result!\n")
+
+        with patch_stdout():
+            while True:
+                try:
+                    # Прибрали неіснуючий аргумент on_changed
+                    user_input = await session.prompt_async(
+                        "kurt> ", 
+                        bottom_toolbar=self.get_bottom_toolbar,
+                        refresh_interval=0.5,
+                        key_bindings=bindings  # <--- ОСЬ ЦЕЙ РЯДОК БРАКУВАЛО!
+                    )
+                    
+                    line = user_input.strip()
+                    if not line:
+                        continue
+                        
+                    parts = line.split(maxsplit=1)
+                    cmd = parts[0].lower()
+                    arg = parts[1] if len(parts) > 1 else ""
+
+                    if cmd in ['exit', 'quit']:
+                        print("See you later!")
+                        break
+                    elif cmd == 'help':
+                        self.handle_help()
+                    elif cmd == 'pause':
+                        self.player.pause()
+                        print("⏸ Playback paused.")
+                    elif cmd == 'resume':
+                        self.player.resume()
+                        print("▶️ Playback resumed.")
+                    elif cmd == 'queue':
+                        self.handle_queue()
+                    elif cmd == 'skip':
+                        self.handle_skip()
+                    elif cmd == 'clear':
+                        self.handle_clear()
+                    elif cmd == 'status':
+                        self.handle_status()
+                    elif cmd == 'volume':
+                        self.handle_volume(arg)
+                    elif cmd == 'add':
+                        self.handle_add(arg)
+                    elif cmd == 'play':
+                        self.handle_play(arg)
+                    elif cmd.isdigit():
+                        self.handle_play(cmd)
+                    else:
+                        print(f"Press Enter on a number to play it, or type 'help' for commands.")
+
+                except (KeyboardInterrupt, EOFError):
+                    print("\nSee you later!")
+                    break
+
+if __name__ == "__main__":
+    shell = KurtAsyncShell()
+    asyncio.run(shell.start())
