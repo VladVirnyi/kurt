@@ -210,11 +210,11 @@ Commands:
   [number]        Play the song at that number (e.g. '1')
   play [number]   Play the specified song
   add [number]    Add the specified song to the queue
-  pause / resume  Pause or resume playback
+  pause(-p) / resume(-r)  Pause or resume playback
   queue           Show the current playlist
-  skip            Skip to the next song in the queue
-  clear           Clear the playlist
-  volume [0-100]  Set or view current volume
+  skip(-s)        Skip to the next song in the queue
+  clear(-c)       Clear the playlist
+  volume(-v) [0-100]  Set or view current volume
   status          Show what is currently playing
   exit / quit     Exit the player
 """
@@ -268,21 +268,21 @@ Commands:
                         break
                     elif cmd == 'help':
                         self.handle_help()
-                    elif cmd == 'pause':
+                    elif cmd == 'pause' or cmd == '-p':
                         self.player.pause()
                         print("⏸ Playback paused.")
-                    elif cmd == 'resume':
+                    elif cmd == 'resume' or cmd == '-r':
                         self.player.resume()
                         print("▶Playback resumed.")
                     elif cmd == 'queue':
                         self.handle_queue()
-                    elif cmd == 'skip':
+                    elif cmd == 'skip' or cmd == '-s':
                         self.handle_skip()
-                    elif cmd == 'clear':
+                    elif cmd == 'clear' or cmd == '-c':
                         self.handle_clear()
                     elif cmd == 'status':
                         self.handle_status()
-                    elif cmd == 'volume':
+                    elif cmd == 'volume' or cmd == '-v':
                         self.handle_volume(arg)
                     elif cmd == 'add':
                         self.handle_add(arg)
