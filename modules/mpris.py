@@ -2,7 +2,8 @@
 # I will testing this on GNOME, but it should work on any DE that supports MPRIS, like KDE, XFCE, etc.
 
 from mpris_server.adapters import MprisAdapter
-from mpris_server.base import PlayState
+from mpris_server.server import Server
+import threading
 
 class KurtMprisAdapter(MprisAdapter):
     def __init__(self, player):
@@ -10,7 +11,11 @@ class KurtMprisAdapter(MprisAdapter):
         super().__init__()
 
     # mpris identity for .desktop file
-    def get_desktop_entry(self):
+    @property
+    def Identity(self):
+        return "Kurt Player"
+    @property
+    def DesktopEntry(self):
         return "kurt"
 
     def can_quit(self):
@@ -61,83 +66,25 @@ class KurtMprisAdapter(MprisAdapter):
         setattr(self.player, "pause", paused)
     
     # player status
-    def get_playstate(self):
-        if not self.player:
-            return PlayState.STOPPED
-        if self._get_pause_state():
-            return PlayState.PAUSED
-        return PlayState.PLAYING
-
-    # Keep this for compatibility with older snippets/usages.
     def playback_status(self):
-        return self.get_playstate().value.title()
-
-    def can_control(self):
-        return True
-
-    def can_go_next(self):
-        return hasattr(self.player, 'playlist_next') or hasattr(self.player, 'queue_skip')
-
-    def can_go_previous(self):
-        return hasattr(self.player, 'playlist_prev')
-
-    def can_pause(self):
-        return True
-
-    def can_play(self):
-        return True
-
-    def can_seek(self):
-        return False
-
-    def get_shuffle(self):
-        return False
-
-    def get_current_position(self):
-        if not self.player:
-            return 0
-
-        instance = getattr(self.player, "instance", None)
-        if instance is not None:
-            seconds = getattr(instance, "time_pos", 0) or 0
-        elif hasattr(self.player, "get_status") and callable(self.player.get_status):
-            seconds = (self.player.get_status() or {}).get("time", 0) or 0
+        """returns 'Playing', 'Paused' or 'Stopped'"""
+        if self.player.pause:
+            return "Paused"
         else:
-            seconds = 0
-
-        return int(float(seconds) * 1_000_000)
-
-    def get_volume(self):
-        if not self.player:
-            return 1.0
-
-        instance = getattr(self.player, "instance", None)
-        if instance is not None:
-            raw_volume = getattr(instance, "volume", 100) or 0
-        elif hasattr(self.player, "get_volume") and callable(self.player.get_volume):
-            raw_volume = self.player.get_volume()
-        else:
-            raw_volume = 100
-
-        normalized = float(raw_volume) / 100.0
-        return max(0.0, min(1.0, normalized))
+            return "Playing"
 
     def metadata(self):
         """returns a dictionary of metadata according to the MPRIS 2 specification"""
-        md = getattr(self.player, "metadata", {}) if self.player else {}
-        if not isinstance(md, dict):
-            md = {}
-        artist = md.get('artist', 'Unknown')
-        if not isinstance(artist, list):
-            artist = [str(artist)]
-            
+        if not self.player or not hasattr(self.player, 'metadata'):
+            return {'mpris:trackid': '/org/mpris/MediaPlayer2/Track/0'}
+        
         try:
             return {
                 'mpris:trackid': '/org/mpris/MediaPlayer2/Track/0',
-                'xesam:title': str(md.get('title', 'Unknown')),
-                'xesam:artist': artist,
-                'xesam:album': str(md.get('album', '')),
-                'xesam:genre': [str(md.get('genre', ''))],
+                'xesam:title': str(self.player.metadata.get('title', 'Unknown')),
+                'xesam:artist': [str(self.player.metadata.get('artist', 'Unknown'))],
+                'xesam:album': str(self.player.metadata.get('album', '')),
+                'xesam:genre': [str(self.player.metadata.get('genre', ''))],
 
                 # If you are fetching album art locally:
                 # 'mpris:artUrl': f"file:///path/to/album_art.jpg" 
