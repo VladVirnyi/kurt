@@ -5,7 +5,7 @@ import asyncio
 import threading
 
 from modules import player
-from modules.mpris import KurtMprisAdapter, Server
+from modules.mpris import KurtMprisAdapter
 from modules.mpris_setup import setup_mpris
 from kurt_shell import KurtAsyncShell
 
